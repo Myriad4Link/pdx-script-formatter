@@ -10,19 +10,15 @@
  * grammar WASM is loaded from the correct path in the test environment.
  */
 import { readFileSync } from "fs";
-import { createRequire } from "module";
 import { describe, it, expect } from "vitest";
-import { setGrammarBinary } from "prettier-plugin-pdx-script";
+import {
+  setGrammarBinary,
+  getGrammarWasmPath,
+} from "prettier-plugin-pdx-script";
 import { formatText, SUPPORTED_LANGUAGES } from "../formatter.js";
 
 // Ensure the grammar WASM is available before the plugin's parser initializes.
-// Resolve through the plugin's `exports` subpath (rc.4+) using `createRequire`
-// because this test file runs in an ESM context (vitest).
-const _require = createRequire(import.meta.url);
-const grammarPath = _require.resolve(
-  "prettier-plugin-pdx-script/dist/tree-sitter/tree-sitter-pdx_script.wasm",
-);
-setGrammarBinary(() => readFileSync(grammarPath));
+setGrammarBinary(() => readFileSync(getGrammarWasmPath()));
 
 describe("formatText", () => {
   it("formats a simple PDXScript declaration", async () => {

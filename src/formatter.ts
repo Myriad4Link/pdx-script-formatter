@@ -7,16 +7,11 @@
  * no dynamic imports or ESM/CJS workarounds are needed.
  */
 import * as prettier from "prettier";
+import { PARSER_NAME } from "prettier-plugin-pdx-script";
 import * as pdxPlugin from "prettier-plugin-pdx-script";
 import { log } from "./logger";
 
 const fmt = log.tagged("formatter");
-
-/**
- * Parser name registered by `prettier-plugin-pdx-script`.
- * If the upstream plugin renames its parser, this is the only value to update.
- */
-const PARSER_NAME = "pdx-script-parse";
 
 /** Paradox game language IDs provided by `tboby.cwtools-vscode`. */
 export const SUPPORTED_LANGUAGES = [
