@@ -85,13 +85,9 @@ async function main() {
     sourcesContent: false,
     platform: "node",
     outfile: "dist/extension.js",
-    external: ["vscode", "web-tree-sitter", "prettier"],
+    external: ["vscode", "web-tree-sitter", "prettier", PLUGIN_PACKAGE],
     logLevel: "silent",
     plugins: [esbuildProblemMatcherPlugin],
-    // Force CJS resolution for the plugin to avoid ESM code paths.
-    alias: {
-      [PLUGIN_PACKAGE]: require.resolve(PLUGIN_PACKAGE), // → dist/index.cjs
-    },
     conditions: ["require", "import"],
   });
 
