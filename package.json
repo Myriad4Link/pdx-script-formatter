@@ -1,6 +1,7 @@
 {
   "name": "pdx-script-formatter",
   "displayName": "PDXScript Formatter",
+  "publisher": "myriad",
   "description": "Formats Paradox game script files (Stellaris, HOI4, EU4) using prettier-plugin-pdx-script",
   "version": "0.0.1",
   "engines": {
@@ -20,7 +21,6 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
-    "commands": [],
     "configuration": {
       "title": "PDXScript Formatter",
       "properties": {

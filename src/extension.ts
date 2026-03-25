@@ -18,7 +18,10 @@ import {
   type LocateFileFn,
 } from "prettier-plugin-pdx-script";
 import { formatText, SUPPORTED_LANGUAGES } from "./formatter";
-import { log, setLogLevel, parseLogLevel } from "./logger";
+import { log, initLogger, setLogLevel, parseLogLevel } from "./logger";
+
+/** Matches the package name in package.json `dependencies` and esbuild.js. */
+const PLUGIN_PACKAGE = "prettier-plugin-pdx-script";
 
 const ext = log.tagged("extension");
 
@@ -29,6 +32,21 @@ const ext = log.tagged("extension");
  * `onLanguage:eu4`, `onLanguage:paradox` (declared in package.json).
  */
 export function activate(context: vscode.ExtensionContext) {
+  // Eagerly create the Output Channel FIRST, before anything else.
+  // This guarantees it appears in the Output dropdown even if activation
+  // fails partway through.
+  initLogger();
+
+  try {
+    activateInner(context);
+  } catch (err) {
+    ext.error("=== ACTIVATION FAILED ===", err);
+    throw err;
+  }
+}
+
+/** Inner activation logic — throws on failure. */
+function activateInner(context: vscode.ExtensionContext) {
   // ── Read debug setting ──────────────────────────────────────────────────
   const config = vscode.workspace.getConfiguration("pdxScriptFormatter");
   const levelName = config.get<string>("logLevel", "info");
@@ -37,20 +55,53 @@ export function activate(context: vscode.ExtensionContext) {
   ext.info("=== Activation start ===");
   ext.info(`Extension ID: ${context.extension.id}`);
   ext.info(`Extension version: ${context.extension.packageJSON?.version}`);
-  ext.info(`Global storage: ${context.globalStorageUri.fsPath}`);
-  ext.info(`Log level: ${levelName}`);
 
   // ── WASM configuration ─────────────────────────────────────────────────
   // These must run before the plugin's parser is initialized (which happens
   // lazily on the first `parse()` call inside prettier.format).
 
-  // Grammar WASM: resolve through the plugin's `exports` subpath (rc.4+).
-  // `readFileSync` runs inside the callback so the file is only read when
-  // the parser is first initialized.
-  const grammarPath =
-    require.resolve("prettier-plugin-pdx-script/dist/tree-sitter/tree-sitter-pdx_script.wasm");
-  ext.debug(`Grammar WASM resolved to: ${grammarPath}`);
-  ext.debug(`Grammar WASM exists: ${readFileSync(grammarPath).length} bytes`);
+  // Grammar WASM: resolve by reading the plugin's package.json exports field.
+  //
+  // We CANNOT use `require.resolve("prettier-plugin-pdx-script/dist/...")`
+  // because esbuild bundles a `createRequire` shim that breaks when the
+  // extension is loaded from a VSIX (VS Code's module loader doesn't set
+  // `__filename` the way esbuild expects).  Instead we look in
+  // `__dirname/node_modules/` for the plugin's package root (copied there
+  // by esbuild.js), then use its `exports` map to locate the WASM file.
+  let grammarPath: string;
+  try {
+    // Use path.join with the known package name rather than require.resolve,
+    // because the latter relies on Node's module resolution which may not
+    // work correctly inside a VSIX-packaged extension.
+    const pluginDir = path.join(__dirname, "node_modules", PLUGIN_PACKAGE);
+    const pluginPkgJsonPath = path.join(pluginDir, "package.json");
+    ext.debug(`Plugin package.json: ${pluginPkgJsonPath}`);
+    const pluginPkg = JSON.parse(readFileSync(pluginPkgJsonPath, "utf-8"));
+    // Find the wasm export entry (the key contains "tree-sitter-pdx_script.wasm")
+    const exportsField = pluginPkg.exports ?? {};
+    const wasmKey = Object.keys(exportsField).find((k) =>
+      k.includes("tree-sitter-pdx_script.wasm"),
+    );
+    if (!wasmKey) {
+      throw new Error(
+        "Could not find grammar WASM entry in prettier-plugin-pdx-script exports",
+      );
+    }
+    const wasmRel = exportsField[wasmKey]?.default ?? exportsField[wasmKey];
+    if (typeof wasmRel !== "string") {
+      throw new Error(
+        `Unexpected export value for ${wasmKey}: ${JSON.stringify(wasmRel)}`,
+      );
+    }
+    grammarPath = path.resolve(pluginDir, wasmRel);
+    ext.debug(`Grammar WASM resolved to: ${grammarPath}`);
+  } catch (err) {
+    ext.error("Failed to resolve grammar WASM path", err);
+    throw err;
+  }
+
+  // Hand the grammar data to the plugin via a lazy callback — the plugin
+  // calls this on its first `parse()` invocation.
   setGrammarBinary(() => {
     const data = readFileSync(grammarPath);
     ext.debug(`Grammar WASM loaded (${data.length} bytes)`);
@@ -84,30 +135,21 @@ export function activate(context: vscode.ExtensionContext) {
         ): Promise<vscode.TextEdit[]> {
           const filename = document.fileName;
           const lineCount = document.lineCount;
-          ext.debug(
-            `Format request: language=${languageId} file=${filename} lines=${lineCount}`,
-          );
 
-          const original = document.getText();
-          const t0 = performance.now();
           try {
-            const formatted = await formatText(original, filename);
-            const elapsed = (performance.now() - t0).toFixed(1);
+            const original = document.getText();
+            const formatted = await formatText(original);
             const changed = formatted !== original;
             ext.info(
-              `Format done in ${elapsed}ms: ${filename} (${lineCount} lines, changed=${changed})`,
+              `Formatted ${filename} (${lineCount} lines, changed=${changed})`,
             );
-            if (!changed) {
-              ext.debug("Text unchanged after formatting");
-            }
             const fullRange = new vscode.Range(
               document.positionAt(0),
               document.positionAt(original.length),
             );
             return [vscode.TextEdit.replace(fullRange, formatted)];
           } catch (err) {
-            const elapsed = (performance.now() - t0).toFixed(1);
-            ext.error(`Format FAILED in ${elapsed}ms: ${filename}`, err);
+            ext.error(`Format FAILED: ${filename}`, err);
             throw err;
           }
         },

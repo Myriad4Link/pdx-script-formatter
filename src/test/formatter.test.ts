@@ -27,7 +27,7 @@ setGrammarBinary(() => readFileSync(grammarPath));
 describe("formatText", () => {
   it("formats a simple PDXScript declaration", async () => {
     const input = "key=value";
-    const result = await formatText(input, "test.txt");
+    const result = await formatText(input);
 
     expect(result).toContain("key");
     expect(result).toContain("value");
@@ -37,40 +37,56 @@ describe("formatText", () => {
 
   it("formats a block structure", async () => {
     const input = "block={inner=value}";
-    const result = await formatText(input, "test.txt");
+    const result = await formatText(input);
 
     expect(result).toContain("block");
     expect(result).toContain("inner");
   });
 
   it("handles empty input", async () => {
-    const result = await formatText("", "test.txt");
+    const result = await formatText("");
 
     expect(typeof result).toBe("string");
   });
 
   it("preserves comments", async () => {
     const input = "# a comment\nkey=value";
-    const result = await formatText(input, "test.txt");
+    const result = await formatText(input);
 
     expect(result).toContain("# a comment");
     expect(result).toContain("key");
   });
 
-  it("defaults filepath to file.txt when not provided", async () => {
-    // Should not throw — prettier defaults to the language's registered extension
-    const result = await formatText("key=value");
-
-    expect(result).toContain("key");
-  });
-
   it("formats nested blocks with indentation", async () => {
     const input = "outer={inner_key=inner_value}";
-    const result = await formatText(input, "test.txt");
+    const result = await formatText(input);
 
     expect(result).toContain("outer");
     expect(result).toContain("inner_key");
     expect(result).toContain("inner_value");
+  });
+
+  it("formats defined_text with check_variable", async () => {
+    const input = `defined_text = {
+	name = GetScourgeGodMishaguchiSamaEasterEgg
+	text = {
+		trigger ={
+			MWD = {
+				check_variable = {
+					var = tarati_count
+					value = 5
+					compare = greater_than_or_equals
+				}
+			}
+		}
+
+		localization_key = "ESTER_EGG_SGMS"
+	}
+} `;
+    const result = await formatText(input);
+
+    expect(typeof result).toBe("string");
+    expect(result.length).toBeGreaterThan(0);
   });
 });
 

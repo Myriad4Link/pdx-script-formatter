@@ -1,5 +1,7 @@
 .vscode/**
 .vscode-test/**
+.idea/**
+.opencode/**
 out/**
 node_modules/**
 !dist/node_modules/**
@@ -10,3 +12,4 @@ esbuild.js
 **/eslint.config.mjs
 **/*.map
 **/*.ts
+vsc-extension-quickstart.md

@@ -12,6 +12,12 @@ import { log } from "./logger";
 
 const fmt = log.tagged("formatter");
 
+/**
+ * Parser name registered by `prettier-plugin-pdx-script`.
+ * If the upstream plugin renames its parser, this is the only value to update.
+ */
+const PARSER_NAME = "pdx-script-parse";
+
 /** Paradox game language IDs provided by `tboby.cwtools-vscode`. */
 export const SUPPORTED_LANGUAGES = [
   "stellaris",
@@ -36,40 +42,27 @@ export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
  * - Comment preservation
  *
  * @param text - Raw PDXScript source text.
- * @param filepath - Optional file path hint for prettier's plugin resolution.
- *   Defaults to `"file.txt"`.
  * @returns The formatted text.
  */
-export async function formatText(
-  text: string,
-  filepath?: string,
-): Promise<string> {
-  const resolvedPath = filepath ?? "file.txt";
-
-  fmt.debug(`formatText: input=${text.length} chars, file=${resolvedPath}`);
+export async function formatText(text: string): Promise<string> {
+  fmt.debug(`formatText: input=${text.length} chars`);
   fmt.trace(
     `formatText: text preview:\n${text.slice(0, 500)}${text.length > 500 ? `\n... (${text.length} chars total)` : ""}`,
   );
 
   try {
     const result = await prettier.format(text, {
-      parser: "pdx-script-parse",
+      parser: PARSER_NAME,
       plugins: [pdxPlugin],
-      filepath: resolvedPath,
     });
 
-    const linesIn = text.split("\n").length;
-    const linesOut = result.split("\n").length;
-    fmt.debug(
-      `formatText: output=${result.length} chars, lines ${linesIn}→${linesOut}`,
-    );
     fmt.trace(
       `formatText: output preview:\n${result.slice(0, 500)}${result.length > 500 ? `\n... (${result.length} chars total)` : ""}`,
     );
 
     return result;
   } catch (err) {
-    fmt.error(`formatText: prettier.format FAILED for ${resolvedPath}`, err);
+    fmt.error("formatText: prettier.format FAILED", err);
     throw err;
   }
 }

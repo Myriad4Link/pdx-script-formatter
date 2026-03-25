@@ -4,12 +4,16 @@
  * All messages go to a dedicated VS Code Output Channel
  * ("PDXScript Formatter"), visible via View → Output → PDXScript Formatter.
  *
- * Logging is gated by the `pdxScriptFormatter.debug` setting so nothing
+ * Additionally, all messages are echoed to `console.log` so they appear in
+ * the Extension Host Developer Tools (Help → Toggle Developer Tools).
+ *
+ * Logging is gated by the `pdxScriptFormatter.logLevel` setting so nothing
  * appears in the user's Output panel unless they opt in.
  *
  * Usage:
  * ```ts
- * import { log, setLogLevel } from "./logger";
+ * import { log, initLogger } from "./logger";
+ * initLogger();  // call once at the top of activate()
  * log.info("Extension activated");
  * log.debug("WASM path", grammarPath);
  * log.error("Format failed", err);
@@ -37,28 +41,27 @@ const CHANNEL_NAME = "PDXScript Formatter";
 
 let channel: vscode.OutputChannel | undefined;
 
-/** Lazily create the Output Channel (survives test runs without vscode). */
-function getChannel(): vscode.OutputChannel | undefined {
+/**
+ * Eagerly create the Output Channel.
+ *
+ * Call this at the very start of `activate()`, before anything that could
+ * throw. This guarantees the channel exists in the Output dropdown even
+ * if activation fails partway through.
+ */
+export function initLogger(): void {
   if (!channel) {
-    try {
-      channel = vscode.window.createOutputChannel(CHANNEL_NAME);
-    } catch {
-      // vscode API not available (e.g. unit test) — no-op
-    }
+    channel = vscode.window.createOutputChannel(CHANNEL_NAME);
   }
-  return channel;
 }
-
-/** Current log level — defaults to DEBUG so all logs appear while debugging. */
-let currentLevel: LogLevel = LogLevel.DEBUG;
 
 /**
- * Returns the log level from the user's settings, or falls back to the
- * explicitly-set level.
+ * Current log level.  Defaults to INFO — `setLogLevel()` is called during
+ * `activate()` to match the user's `pdxScriptFormatter.logLevel` setting,
+ * so this default only affects calls that happen before activation (if any).
+ * Using INFO rather than DEBUG avoids accidentally verbose output in
+ * production if `setLogLevel` is delayed or fails.
  */
-function getConfiguredLevel(): LogLevel {
-  return currentLevel;
-}
+let currentLevel: LogLevel = LogLevel.INFO;
 
 /**
  * Override the log level programmatically.
@@ -106,15 +109,11 @@ function timestamp(): string {
 
 /**
  * Core write function.  Checks the current level, formats the message, and
- * writes to the Output Channel if one exists.
+ * writes to the Output Channel if one exists. Also echoes to `console.log`
+ * so messages appear in the Extension Host Developer Tools.
  */
 function write(level: LogLevel, tag: string, ...args: unknown[]): void {
-  if (level > getConfiguredLevel()) {
-    return;
-  }
-
-  const ch = getChannel();
-  if (!ch) {
+  if (level > currentLevel) {
     return;
   }
 
@@ -145,7 +144,20 @@ function write(level: LogLevel, tag: string, ...args: unknown[]): void {
     })
     .join(" ");
 
-  ch.appendLine(`${timestamp()} ${label} [${tag}] ${msg}`);
+  const line = `${timestamp()} ${label} [${tag}] ${msg}`;
+
+  // Write to Output Channel (if created)
+  if (channel) {
+    channel.appendLine(line);
+  }
+
+  // Always echo to console — visible in Extension Host Developer Tools
+  // (Help → Toggle Developer Tools → Console tab)
+  if (level <= LogLevel.WARN) {
+    console.error(line);
+  } else {
+    console.log(line);
+  }
 }
 
 /**
@@ -155,7 +167,7 @@ function write(level: LogLevel, tag: string, ...args: unknown[]): void {
  * The `tag` parameter lets you filter logs by subsystem.
  *
  * All methods are safe to call even when the Output Channel hasn't been
- * created yet (they become no-ops).
+ * created yet (they fall back to console only).
  */
 export const log = {
   error: (...args: unknown[]) => write(LogLevel.ERROR, "main", ...args),
