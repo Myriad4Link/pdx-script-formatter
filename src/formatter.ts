@@ -21,9 +21,6 @@ export const SUPPORTED_LANGUAGES = [
   "paradox",
 ] as const;
 
-/** Union type of the four supported language IDs. */
-export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
-
 /**
  * Formats PDXScript text using prettier with the `pdx-script-parse` parser.
  *
