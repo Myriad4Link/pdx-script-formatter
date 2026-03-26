@@ -43,7 +43,7 @@ const esbuildProblemMatcherPlugin = {
  *
  * - `web-tree-sitter` — tree-sitter WASM runtime
  * - `prettier` — must be external to avoid a circular self-reference when
- *   bundled (see BUG_REPORT.md)
+ *   bundled
  * - `prettier-plugin-pdx-script` — its WASM grammar and package.json are
  *   read via `readFileSync` during activation, so the package must exist
  *   on disk at a known location
